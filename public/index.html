@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Votazione</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2430;
+    --ink-2:#242F40;
+    --paper:#E9E3D3;
+    --paper-2:#F3EFE4;
+    --accent:#B5442E;
+    --accent-dark:#8F3423;
+    --line:#CBC3AC;
+    --line-soft:#DAD4C1;
+    --text-dark:#20242B;
+    --text-muted:#726C5D;
+    --good:#3C6B4A;
+    --good-bg:#E3EDE5;
+    --font-display:'Fraunces', Georgia, serif;
+    --font-body:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    font-family:var(--font-body);
+    color:var(--text-dark);
+    min-height:100vh;
+  }
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+  }
+  header.topbar{
+    background:var(--ink);
+    color:var(--paper-2);
+    padding:22px 20px 16px;
+    border-bottom:3px solid var(--accent);
+  }
+  header.topbar h1{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:22px;
+    margin:0 0 4px;
+  }
+  header.topbar p{
+    margin:0;
+    font-size:13px;
+    color:#B8C0CC;
+  }
+  nav.tabs{
+    display:flex;
+    background:var(--ink-2);
+  }
+  nav.tabs button{
+    flex:1;
+    background:none;
+    border:none;
+    color:#AEB7C4;
+    font-family:var(--font-body);
+    font-size:13px;
+    font-weight:600;
+    padding:13px 6px;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+  }
+  nav.tabs button.active{
+    color:#fff;
+    border-bottom-color:var(--accent);
+  }
+  main{
+    flex:1;
+    padding:18px 18px 40px;
+  }
+  .card{
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .muted{ color:var(--text-muted); font-size:13px; }
+  h2.section-title{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:19px;
+    margin:0 0 12px;
+  }
+  .tally-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+  }
+  .tally-box{
+    flex:1;
+    min-width:90px;
+    background:var(--ink);
+    color:var(--paper-2);
+    border-radius:6px;
+    padding:9px 10px;
+    text-align:center;
+  }
+  .tally-box .n{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:700;
+    display:block;
+  }
+  .tally-box .lbl{
+    font-size:11px;
+    color:#B8C0CC;
+    display:block;
+    margin-top:1px;
+  }
+  .person-row{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px;
+    margin-bottom:10px;
+    transition:border-color .15s, background .15s;
+  }
+  .person-row.selected{
+    border-color:var(--accent);
+    background:#F6EFE2;
+  }
+  .person-row.disabled{
+    opacity:0.42;
+  }
+  .person-photo{
+    width:56px;
+    height:56px;
+    border-radius:6px;
+    object-fit:cover;
+    background:var(--line-soft);
+    flex-shrink:0;
+  }
+  .person-photo.placeholder{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:var(--font-display);
+    font-size:20px;
+    color:var(--text-muted);
+  }
+  .person-info{ flex:1; min-width:0; }
+  .person-info .name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:16px;
+    margin:0 0 2px;
+  }
+  .person-info .desc{
+    font-size:13px;
+    color:var(--text-muted);
+    margin:0;
+    line-height:1.4;
+  }
+  .checkbox-box{
+    width:26px;
+    height:26px;
+    border:2px solid var(--ink);
+    border-radius:3px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    background:#fff;
+    font-weight:700;
+    color:var(--accent);
+    font-size:16px;
+    margin-top:2px;
+  }
+  button.primary{
+    width:100%;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    padding:14px;
+    font-family:var(--font-body);
+    font-weight:700;
+    font-size:15px;
+    cursor:pointer;
+  }
+  button.primary:disabled{
+    background:#C7BFAE;
+    cursor:not-allowed;
+  }
+  button.secondary{
+    width:100%;
+    background:transparent;
+    color:var(--ink);
+    border:1.5px solid var(--ink);
+    border-radius:6px;
+    padding:12px;
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    margin-top:8px;
+  }
+  button.danger{
+    background:var(--accent-dark);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    padding:12px;
+    font-family:var(--font-body);
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    width:100%;
+  }
+  button.small{
+    background:transparent;
+    border:1px solid var(--line);
+    border-radius:5px;
+    padding:6px 10px;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    color:var(--text-dark);
+  }
+  input[type=text], input[type=number], input[type=password], textarea, select{
+    width:100%;
+    font-family:var(--font-body);
+    font-size:14px;
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:5px;
+    background:#fff;
+    color:var(--text-dark);
+  }
+  textarea{ resize:vertical; min-height:60px; }
+  label.field-label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-muted);
+    margin:10px 0 4px;
+  }
+  .confirm-box{ text-align:center; padding:20px 10px; }
+  .confirm-box .icon-circ{
+    width:56px;
+    height:56px;
+    border-radius:50%;
+    background:var(--good-bg);
+    color:var(--good);
+    font-size:28px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0 auto 12px;
+    font-weight:700;
+  }
+  .confirm-box h3{ font-family:var(--font-display); margin:0 0 6px; font-size:19px; }
+  .confirm-box ul{ text-align:left; padding-left:20px; font-size:14px; margin:12px 0; }
+  .toast{
+    background:var(--accent-dark);
+    color:#fff;
+    padding:10px 14px;
+    border-radius:5px;
+    font-size:13px;
+    margin-bottom:12px;
+  }
+  .result-row{ margin-bottom:12px; }
+  .result-row .r-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+  .result-row .r-name{ font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }
+  .result-row .r-count{ font-family:var(--font-display); font-weight:700; font-size:16px; }
+  .bar-track{ background:var(--line-soft); border-radius:4px; height:10px; overflow:hidden; }
+  .bar-fill{ background:var(--accent); height:100%; border-radius:4px; transition:width .3s ease; }
+  .thumb-mini{ width:26px; height:26px; border-radius:4px; object-fit:cover; background:var(--line-soft); }
+  .admin-people-item{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line-soft); }
+  .admin-people-item:last-child{ border-bottom:none; }
+  .admin-people-item .name{ flex:1; font-size:14px; font-weight:600; }
+  .admin-people-item .sesso-tag{ font-size:11px; color:var(--text-muted); background:var(--line-soft); padding:2px 7px; border-radius:10px; }
+  .empty-state{ text-align:center; padding:30px 10px; color:var(--text-muted); font-size:14px; }
+  .row-flex{ display:flex; gap:8px; }
+  .row-flex > *{ flex:1; }
+  .photo-preview{ width:70px; height:70px; object-fit:cover; border-radius:6px; margin-top:6px; background:var(--line-soft); }
+  .spinner{ text-align:center; padding:40px 10px; color:var(--text-muted); font-size:14px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <h1 id="page-title">Votazione</h1>
+    <p id="page-subtitle">Seleziona i tuoi candidati</p>
+  </header>
+  <nav class="tabs">
+    <button data-tab="vota" class="active">Vota</button>
+    <button data-tab="risultati">Risultati</button>
+    <button data-tab="admin">Admin</button>
+  </nav>
+  <main id="main"></main>
+</div>
+
+<script>
+const API = '/api';
+
+async function apiGet(path){
+  const r = await fetch(API + path);
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error || ('Errore ' + r.status));
+  return r.json();
+}
+async function apiPost(path, body, admin){
+  const headers = { 'Content-Type': 'application/json' };
+  if(admin) headers['x-admin-password'] = getAdminPassword();
+  const r = await fetch(API + path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error || ('Errore ' + r.status));
+  return data;
+}
+async function apiDelete(path, admin){
+  const headers = {};
+  if(admin) headers['x-admin-password'] = getAdminPassword();
+  const r = await fetch(API + path, { method: 'DELETE', headers });
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error || ('Errore ' + r.status));
+  return data;
+}
+
+function getAdminPassword(){
+  return sessionStorage.getItem('admin_password') || '';
+}
+
+function compressImage(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 320;
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function initials(nome, cognome){
+  return ((nome||'')[0]||'').toUpperCase() + ((cognome||'')[0]||'').toUpperCase();
+}
+
+const main = document.getElementById('main');
+const titleEl = document.getElementById('page-title');
+const subtitleEl = document.getElementById('page-subtitle');
+const tabButtons = document.querySelectorAll('nav.tabs button');
+
+let currentTab = 'vota';
+let voteState = { selected: new Set(), submitted: false, lastSubmittedNames: [] };
+
+tabButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    currentTab = btn.dataset.tab;
+    tabButtons.forEach(b=>b.classList.toggle('active', b===btn));
+    render();
+  });
+});
+
+async function render(){
+  if(currentTab === 'vota') return renderVota();
+  if(currentTab === 'risultati') return renderRisultati();
+  if(currentTab === 'admin') return renderAdmin();
+}
+
+// ---------- VOTA ----------
+async function renderVota(){
+  titleEl.textContent = 'Votazione';
+  subtitleEl.textContent = 'Seleziona i tuoi candidati';
+  main.innerHTML = '<div class="spinner">Caricamento…</div>';
+
+  let cfg, people;
+  try{
+    [cfg, people] = await Promise.all([apiGet('/config'), apiGet('/people')]);
+  }catch(e){
+    main.innerHTML = '<div class="card empty-state">Errore di connessione al server: ' + escapeHtml(e.message) + '</div>';
+    return;
+  }
+
+  if(voteState.submitted){
+    main.innerHTML = `
+      <div class="card confirm-box">
+        <div class="icon-circ">&#10003;</div>
+        <h3>Voto inviato</h3>
+        <p class="muted">Hai votato per:</p>
+        <ul>${voteState.lastSubmittedNames.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>
+        <button class="secondary" id="vote-again">Vota di nuovo</button>
+      </div>
+    `;
+    document.getElementById('vote-again').addEventListener('click', ()=>{
+      voteState = { selected: new Set(), submitted:false, lastSubmittedNames:[] };
+      renderVota();
+    });
+    return;
+  }
+
+  if(!people.length){
+    main.innerHTML = `<div class="card empty-state">Nessuna persona in elenco al momento.<br>Contatta l'amministratore.</div>`;
+    return;
+  }
+
+  const selected = voteState.selected;
+  const countTotal = selected.size;
+  const countM = [...selected].filter(id => (people.find(p=>p.id===id)||{}).sesso === 'M').length;
+  const countF = [...selected].filter(id => (people.find(p=>p.id===id)||{}).sesso === 'F').length;
+
+  let html = `<div class="tally-row">
+    <div class="tally-box"><span class="n">${countTotal}/${cfg.n}</span><span class="lbl">Selezionati</span></div>
+    <div class="tally-box"><span class="n">${countM}/${cfg.x}</span><span class="lbl">Uomini</span></div>
+    <div class="tally-box"><span class="n">${countF}/${cfg.y}</span><span class="lbl">Donne</span></div>
+  </div>`;
+
+  html += people.map(p=>{
+    const isSel = selected.has(p.id);
+    let disabled = false;
+    if(!isSel){
+      if(countTotal >= cfg.n) disabled = true;
+      if(p.sesso === 'M' && countM >= cfg.x) disabled = true;
+      if(p.sesso === 'F' && countF >= cfg.y) disabled = true;
+    }
+    const photoHtml = p.foto
+      ? `<img class="person-photo" src="${p.foto}" alt="">`
+      : `<div class="person-photo placeholder">${initials(p.nome,p.cognome)}</div>`;
+    return `
+      <div class="person-row ${isSel?'selected':''} ${disabled?'disabled':''}" data-id="${p.id}">
+        ${photoHtml}
+        <div class="person-info">
+          <p class="name">${escapeHtml(p.nome)} ${escapeHtml(p.cognome)}</p>
+          <p class="desc">${escapeHtml(p.descrizione||'')}</p>
+        </div>
+        <div class="checkbox-box">${isSel?'&#10003;':''}</div>
+      </div>
+    `;
+  }).join('');
+
+  html += `<button class="primary" id="submit-vote" ${countTotal===0?'disabled':''}>Invia voto (${countTotal})</button>`;
+
+  main.innerHTML = html;
+
+  main.querySelectorAll('.person-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const id = row.dataset.id;
+      const p = people.find(pp=>pp.id===id);
+      const isSel = selected.has(id);
+      if(isSel){
+        selected.delete(id);
+      } else {
+        if(countTotal >= cfg.n) return;
+        if(p.sesso === 'M' && countM >= cfg.x) return;
+        if(p.sesso === 'F' && countF >= cfg.y) return;
+        selected.add(id);
+      }
+      renderVota();
+    });
+  });
+
+  const submitBtn = document.getElementById('submit-vote');
+  if(submitBtn){
+    submitBtn.addEventListener('click', async ()=>{
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Invio in corso…';
+      const ids = [...selected];
+      const names = ids.map(id=>{
+        const p = people.find(pp=>pp.id===id);
+        return p ? (p.nome + ' ' + p.cognome) : '';
+      });
+      try{
+        await apiPost('/votes', { ids });
+        voteState.submitted = true;
+        voteState.lastSubmittedNames = names;
+        renderVota();
+      }catch(e){
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Invia voto (' + ids.length + ')';
+        alert('Errore di invio: ' + e.message);
+      }
+    });
+  }
+}
+
+// ---------- RISULTATI ----------
+let resultsAutoTimer = null;
+
+async function renderRisultati(){
+  titleEl.textContent = 'Risultati';
+  subtitleEl.textContent = 'Aggiornamento in tempo reale';
+  if(!main.dataset.risultatiInit){
+    main.innerHTML = '<div class="spinner">Caricamento…</div>';
+  }
+  await loadAndRenderResults();
+  if(resultsAutoTimer) clearInterval(resultsAutoTimer);
+  resultsAutoTimer = setInterval(()=>{
+    if(currentTab === 'risultati') loadAndRenderResults();
+    else clearInterval(resultsAutoTimer);
+  }, 6000);
+}
+
+async function loadAndRenderResults(){
+  let people, votes;
+  try{
+    [people, votes] = await Promise.all([apiGet('/people'), apiGet('/votes')]);
+  }catch(e){
+    main.innerHTML = '<div class="card empty-state">Errore di connessione al server.</div>';
+    return;
+  }
+  const tally = {};
+  people.forEach(p=> tally[p.id] = 0);
+  votes.forEach(v=>{
+    (v.ids||[]).forEach(id=>{
+      if(tally[id] !== undefined) tally[id]++;
+    });
+  });
+  const ranked = people
+    .map(p=>({p, count: tally[p.id]||0}))
+    .sort((a,b)=> b.count - a.count);
+  const maxCount = Math.max(1, ...ranked.map(r=>r.count));
+
+  let html = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><span class="muted">Voti totali registrati</span><br><span style="font-family:var(--font-display);font-size:22px;font-weight:700;">${votes.length}</span></div>
+    <button class="small" id="refresh-results">Aggiorna</button>
+  </div>`;
+
+  if(!ranked.length){
+    html += `<div class="card empty-state">Nessuna persona in elenco.</div>`;
+  } else {
+    html += '<div class="card">';
+    html += ranked.map(r=>{
+      const photoHtml = r.p.foto
+        ? `<img class="thumb-mini" src="${r.p.foto}" alt="">`
+        : `<div class="thumb-mini" style="display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-display);">${initials(r.p.nome,r.p.cognome)}</div>`;
+      const pct = Math.round((r.count / maxCount) * 100);
+      return `
+        <div class="result-row">
+          <div class="r-head">
+            <span class="r-name">${photoHtml} ${escapeHtml(r.p.nome)} ${escapeHtml(r.p.cognome)}</span>
+            <span class="r-count">${r.count}</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        </div>
+      `;
+    }).join('');
+    html += '</div>';
+  }
+
+  main.innerHTML = html;
+  main.dataset.risultatiInit = '1';
+  const refreshBtn = document.getElementById('refresh-results');
+  if(refreshBtn) refreshBtn.addEventListener('click', loadAndRenderResults);
+}
+
+// ---------- ADMIN ----------
+let adminAuthed = sessionStorage.getItem('admin_ok') === '1';
+let adminPhotoData = null;
+
+async function renderAdmin(){
+  titleEl.textContent = 'Amministrazione';
+  subtitleEl.textContent = 'Configura elenco, limiti e voti';
+
+  if(!adminAuthed){
+    main.innerHTML = `
+      <div class="card">
+        <h2 class="section-title">Accesso amministratore</h2>
+        <label class="field-label">Password</label>
+        <input type="password" id="admin-pass" placeholder="Password">
+        <button class="primary" style="margin-top:12px;" id="admin-login">Entra</button>
+        <p class="muted" id="admin-error" style="display:none;color:var(--accent-dark);margin-top:8px;"></p>
+      </div>
+    `;
+    document.getElementById('admin-login').addEventListener('click', async ()=>{
+      const val = document.getElementById('admin-pass').value;
+      sessionStorage.setItem('admin_password', val);
+      try{
+        await apiPost('/admin/check', {}, true);
+        adminAuthed = true;
+        sessionStorage.setItem('admin_ok','1');
+        renderAdmin();
+      }catch(e){
+        const err = document.getElementById('admin-error');
+        err.textContent = 'Password errata.';
+        err.style.display = 'block';
+      }
+    });
+    document.getElementById('admin-pass').addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') document.getElementById('admin-login').click();
+    });
+    return;
+  }
+
+  main.innerHTML = '<div class="spinner">Caricamento…</div>';
+  let cfg, people, votes;
+  try{
+    [cfg, people, votes] = await Promise.all([apiGet('/config'), apiGet('/people'), apiGet('/votes')]);
+  }catch(e){
+    main.innerHTML = '<div class="card empty-state">Errore di connessione al server.</div>';
+    return;
+  }
+
+  let html = '';
+
+  html += `<div class="card">
+    <h2 class="section-title">Parametri di voto</h2>
+    <div class="row-flex">
+      <div>
+        <label class="field-label">Max totale (N)</label>
+        <input type="number" min="0" id="cfg-n" value="${cfg.n}">
+      </div>
+      <div>
+        <label class="field-label">Max uomini (X)</label>
+        <input type="number" min="0" id="cfg-x" value="${cfg.x}">
+      </div>
+      <div>
+        <label class="field-label">Max donne (Y)</label>
+        <input type="number" min="0" id="cfg-y" value="${cfg.y}">
+      </div>
+    </div>
+    <button class="primary" style="margin-top:12px;" id="save-cfg">Salva parametri</button>
+    <p class="muted" id="cfg-msg" style="display:none;margin-top:8px;"></p>
+  </div>`;
+
+  html += `<div class="card">
+    <h2 class="section-title">Aggiungi persona</h2>
+    <label class="field-label">Nome</label>
+    <input type="text" id="p-nome" placeholder="Nome">
+    <label class="field-label">Cognome</label>
+    <input type="text" id="p-cognome" placeholder="Cognome">
+    <label class="field-label">Sesso</label>
+    <select id="p-sesso">
+      <option value="M">Uomo</option>
+      <option value="F">Donna</option>
+    </select>
+    <label class="field-label">Breve descrizione</label>
+    <textarea id="p-desc" placeholder="Breve descrizione"></textarea>
+    <label class="field-label">Foto</label>
+    <input type="file" id="p-foto" accept="image/*">
+    <img id="p-foto-preview" class="photo-preview" style="display:none;">
+    <button class="primary" style="margin-top:12px;" id="add-person">Aggiungi persona</button>
+    <p class="muted" id="add-msg" style="display:none;margin-top:8px;"></p>
+  </div>`;
+
+  html += `<div class="card">
+    <h2 class="section-title">Elenco persone (${people.length})</h2>
+    <div id="people-list">`;
+  if(!people.length){
+    html += `<div class="empty-state">Nessuna persona inserita ancora.</div>`;
+  } else {
+    html += people.map(p=>`
+      <div class="admin-people-item">
+        <img class="thumb-mini" src="${p.foto || ''}" style="${p.foto?'':'display:none;'}" alt="">
+        <span class="name">${escapeHtml(p.nome)} ${escapeHtml(p.cognome)}</span>
+        <span class="sesso-tag">${p.sesso==='M'?'Uomo':'Donna'}</span>
+        <button class="small" data-remove="${p.id}">Rimuovi</button>
+      </div>
+    `).join('');
+  }
+  html += `</div></div>`;
+
+  html += `<div class="card" style="border-color:var(--accent-dark);">
+    <h2 class="section-title">Voti registrati</h2>
+    <p class="muted">Totale voti: <strong>${votes.length}</strong></p>
+    <button class="danger" id="reset-votes" style="margin-top:8px;">Azzera tutti i voti</button>
+  </div>`;
+
+  html += `<button class="secondary" id="admin-logout">Esci dall'area amministratore</button>`;
+
+  main.innerHTML = html;
+
+  document.getElementById('save-cfg').addEventListener('click', async ()=>{
+    const n = parseInt(document.getElementById('cfg-n').value, 10) || 0;
+    const x = parseInt(document.getElementById('cfg-x').value, 10) || 0;
+    const y = parseInt(document.getElementById('cfg-y').value, 10) || 0;
+    const msg = document.getElementById('cfg-msg');
+    msg.style.display = 'block';
+    try{
+      await apiPost('/config', { n, x, y }, true);
+      msg.textContent = 'Parametri salvati.';
+    }catch(e){
+      msg.textContent = 'Errore: ' + e.message;
+    }
+  });
+
+  document.getElementById('p-foto').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const dataUrl = await compressImage(file);
+    adminPhotoData = dataUrl;
+    const prev = document.getElementById('p-foto-preview');
+    prev.src = dataUrl;
+    prev.style.display = 'block';
+  });
+
+  document.getElementById('add-person').addEventListener('click', async ()=>{
+    const nome = document.getElementById('p-nome').value.trim();
+    const cognome = document.getElementById('p-cognome').value.trim();
+    const sesso = document.getElementById('p-sesso').value;
+    const descrizione = document.getElementById('p-desc').value.trim();
+    const msg = document.getElementById('add-msg');
+    msg.style.display = 'block';
+    if(!nome || !cognome){
+      msg.textContent = 'Inserisci almeno nome e cognome.';
+      return;
+    }
+    try{
+      await apiPost('/people', { nome, cognome, sesso, descrizione, foto: adminPhotoData || '' }, true);
+      adminPhotoData = null;
+      renderAdmin();
+    }catch(e){
+      msg.textContent = 'Errore: ' + e.message;
+    }
+  });
+
+  main.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm("Rimuovere questa persona dall'elenco?")) return;
+      try{
+        await apiDelete('/people/' + btn.dataset.remove, true);
+        renderAdmin();
+      }catch(e){
+        alert('Errore: ' + e.message);
+      }
+    });
+  });
+
+  document.getElementById('reset-votes').addEventListener('click', async ()=>{
+    if(!confirm("Sei sicuro di voler azzerare tutti i voti? L'operazione non è reversibile.")) return;
+    if(!confirm("Confermi definitivamente l'azzeramento di tutti i voti?")) return;
+    try{
+      await apiPost('/votes/reset', {}, true);
+      renderAdmin();
+    }catch(e){
+      alert('Errore: ' + e.message);
+    }
+  });
+
+  document.getElementById('admin-logout').addEventListener('click', ()=>{
+    adminAuthed = false;
+    sessionStorage.removeItem('admin_ok');
+    sessionStorage.removeItem('admin_password');
+    renderAdmin();
+  });
+}
+
+render();
+</script>
+</body>
+</html>
