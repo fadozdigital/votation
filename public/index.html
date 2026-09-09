@@ -313,14 +313,15 @@
 <script>
 const API = '/api';
 
-async function apiGet(path){
-  const r = await fetch(API + path);
+async function apiGet(path, extraHeaders){
+  const r = await fetch(API + path, { headers: extraHeaders || {} });
   if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error || ('Errore ' + r.status));
   return r.json();
 }
-async function apiPost(path, body, admin){
+async function apiPost(path, body, admin, results){
   const headers = { 'Content-Type': 'application/json' };
   if(admin) headers['x-admin-password'] = getAdminPassword();
+  if(results) headers['x-results-password'] = getResultsPassword();
   const r = await fetch(API + path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
   const data = await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(data.error || ('Errore ' + r.status));
@@ -337,6 +338,9 @@ async function apiDelete(path, admin){
 
 function getAdminPassword(){
   return sessionStorage.getItem('admin_password') || '';
+}
+function getResultsPassword(){
+  return sessionStorage.getItem('results_password') || '';
 }
 
 function compressImage(file){
@@ -370,13 +374,25 @@ function initials(nome, cognome){
   return ((nome||'')[0]||'').toUpperCase() + ((cognome||'')[0]||'').toUpperCase();
 }
 
+function downloadFile(filename, content, mimeType){
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const main = document.getElementById('main');
 const titleEl = document.getElementById('page-title');
 const subtitleEl = document.getElementById('page-subtitle');
 const tabButtons = document.querySelectorAll('nav.tabs button');
 
 let currentTab = 'vota';
-let voteState = { selected: new Set(), submitted: false, lastSubmittedNames: [] };
+let voteState = { tokenValidated: false, token: '', selected: new Set(), submitted: false, lastSubmittedNames: [] };
 
 tabButtons.forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -396,15 +412,6 @@ async function render(){
 async function renderVota(){
   titleEl.textContent = 'Votazione';
   subtitleEl.textContent = 'Seleziona i tuoi candidati';
-  main.innerHTML = '<div class="spinner">Caricamento…</div>';
-
-  let cfg, people;
-  try{
-    [cfg, people] = await Promise.all([apiGet('/config'), apiGet('/people')]);
-  }catch(e){
-    main.innerHTML = '<div class="card empty-state">Errore di connessione al server: ' + escapeHtml(e.message) + '</div>';
-    return;
-  }
 
   if(voteState.submitted){
     main.innerHTML = `
@@ -417,9 +424,61 @@ async function renderVota(){
       </div>
     `;
     document.getElementById('vote-again').addEventListener('click', ()=>{
-      voteState = { selected: new Set(), submitted:false, lastSubmittedNames:[] };
+      voteState = { tokenValidated:false, token:'', selected: new Set(), submitted:false, lastSubmittedNames:[] };
       renderVota();
     });
+    return;
+  }
+
+  if(!voteState.tokenValidated){
+    subtitleEl.textContent = 'Inserisci il tuo codice di accesso';
+    main.innerHTML = `
+      <div class="card">
+        <h2 class="section-title">Codice di accesso</h2>
+        <p class="muted">Inserisci il codice numerico a 4 cifre che ti è stato consegnato.</p>
+        <input type="text" id="token-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" style="text-align:center;font-size:24px;letter-spacing:6px;font-family:var(--font-display);">
+        <button class="primary" style="margin-top:12px;" id="token-submit">Continua</button>
+        <p class="muted" id="token-error" style="display:none;color:var(--accent-dark);margin-top:8px;"></p>
+      </div>
+    `;
+    const tokenInput = document.getElementById('token-input');
+    const tokenBtn = document.getElementById('token-submit');
+    const doValidate = async ()=>{
+      const token = tokenInput.value.trim();
+      const err = document.getElementById('token-error');
+      if(!/^[0-9]{4}$/.test(token)){
+        err.style.display = 'block';
+        err.textContent = 'Inserisci un codice di 4 cifre.';
+        return;
+      }
+      tokenBtn.disabled = true;
+      tokenBtn.textContent = 'Verifica…';
+      try{
+        await apiPost('/tokens/validate', { token });
+        voteState.tokenValidated = true;
+        voteState.token = token;
+        renderVota();
+      }catch(e){
+        tokenBtn.disabled = false;
+        tokenBtn.textContent = 'Continua';
+        err.style.display = 'block';
+        err.textContent = e.message;
+      }
+    };
+    tokenBtn.addEventListener('click', doValidate);
+    tokenInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') doValidate(); });
+    tokenInput.focus();
+    return;
+  }
+
+  subtitleEl.textContent = 'Seleziona i tuoi candidati';
+  main.innerHTML = '<div class="spinner">Caricamento…</div>';
+
+  let cfg, people;
+  try{
+    [cfg, people] = await Promise.all([apiGet('/config'), apiGet('/people')]);
+  }catch(e){
+    main.innerHTML = '<div class="card empty-state">Errore di connessione al server: ' + escapeHtml(e.message) + '</div>';
     return;
   }
 
@@ -494,7 +553,7 @@ async function renderVota(){
         return p ? (p.nome + ' ' + p.cognome) : '';
       });
       try{
-        await apiPost('/votes', { ids });
+        await apiPost('/votes', { ids, token: voteState.token });
         voteState.submitted = true;
         voteState.lastSubmittedNames = names;
         renderVota();
@@ -502,6 +561,11 @@ async function renderVota(){
         submitBtn.disabled = false;
         submitBtn.textContent = 'Invia voto (' + ids.length + ')';
         alert('Errore di invio: ' + e.message);
+        if(/codice/i.test(e.message)){
+          voteState.tokenValidated = false;
+          voteState.token = '';
+          renderVota();
+        }
       }
     });
   }
@@ -509,10 +573,43 @@ async function renderVota(){
 
 // ---------- RISULTATI ----------
 let resultsAutoTimer = null;
+let resultsAuthed = sessionStorage.getItem('results_ok') === '1';
 
 async function renderRisultati(){
   titleEl.textContent = 'Risultati';
   subtitleEl.textContent = 'Aggiornamento in tempo reale';
+
+  if(!resultsAuthed){
+    if(resultsAutoTimer) clearInterval(resultsAutoTimer);
+    main.innerHTML = `
+      <div class="card">
+        <h2 class="section-title">Accesso ai risultati</h2>
+        <label class="field-label">Password</label>
+        <input type="password" id="results-pass" placeholder="Password">
+        <button class="primary" style="margin-top:12px;" id="results-login">Entra</button>
+        <p class="muted" id="results-error" style="display:none;color:var(--accent-dark);margin-top:8px;"></p>
+      </div>
+    `;
+    document.getElementById('results-login').addEventListener('click', async ()=>{
+      const val = document.getElementById('results-pass').value;
+      sessionStorage.setItem('results_password', val);
+      try{
+        await apiPost('/results/check', {}, false, true);
+        resultsAuthed = true;
+        sessionStorage.setItem('results_ok','1');
+        renderRisultati();
+      }catch(e){
+        const err = document.getElementById('results-error');
+        err.textContent = 'Password errata.';
+        err.style.display = 'block';
+      }
+    });
+    document.getElementById('results-pass').addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') document.getElementById('results-login').click();
+    });
+    return;
+  }
+
   if(!main.dataset.risultatiInit){
     main.innerHTML = '<div class="spinner">Caricamento…</div>';
   }
@@ -527,7 +624,10 @@ async function renderRisultati(){
 async function loadAndRenderResults(){
   let people, votes;
   try{
-    [people, votes] = await Promise.all([apiGet('/people'), apiGet('/votes')]);
+    [people, votes] = await Promise.all([
+      apiGet('/people'),
+      apiGet('/votes', { 'x-results-password': getResultsPassword() })
+    ]);
   }catch(e){
     main.innerHTML = '<div class="card empty-state">Errore di connessione al server.</div>';
     return;
@@ -571,10 +671,19 @@ async function loadAndRenderResults(){
     html += '</div>';
   }
 
+  html += `<button class="secondary" id="results-logout">Esci</button>`;
+
   main.innerHTML = html;
   main.dataset.risultatiInit = '1';
   const refreshBtn = document.getElementById('refresh-results');
   if(refreshBtn) refreshBtn.addEventListener('click', loadAndRenderResults);
+  document.getElementById('results-logout').addEventListener('click', ()=>{
+    resultsAuthed = false;
+    sessionStorage.removeItem('results_ok');
+    sessionStorage.removeItem('results_password');
+    if(resultsAutoTimer) clearInterval(resultsAutoTimer);
+    renderRisultati();
+  });
 }
 
 // ---------- ADMIN ----------
@@ -616,9 +725,11 @@ async function renderAdmin(){
   }
 
   main.innerHTML = '<div class="spinner">Caricamento…</div>';
-  let cfg, people, votes;
+  let cfg, people, votes, tokens;
   try{
-    [cfg, people, votes] = await Promise.all([apiGet('/config'), apiGet('/people'), apiGet('/votes')]);
+    [cfg, people, votes, tokens] = await Promise.all([
+      apiGet('/config'), apiGet('/people'), apiGet('/votes', { 'x-admin-password': getAdminPassword() }), apiGet('/tokens', { 'x-admin-password': getAdminPassword() })
+    ]);
   }catch(e){
     main.innerHTML = '<div class="card empty-state">Errore di connessione al server.</div>';
     return;
@@ -683,6 +794,49 @@ async function renderAdmin(){
   }
   html += `</div></div>`;
 
+  const tokenValid = tokens.filter(t=>!t.used).length;
+  const tokenUsed = tokens.filter(t=>t.used).length;
+
+  html += `<div class="card">
+    <h2 class="section-title">Codici di accesso al voto</h2>
+    <p class="muted">Ogni votante deve inserire un codice numerico a 4 cifre per poter votare. Il codice si "brucia" automaticamente dopo l'invio del voto.</p>
+    <div class="tally-row" style="margin-top:10px;">
+      <div class="tally-box"><span class="n">${tokens.length}</span><span class="lbl">Totali</span></div>
+      <div class="tally-box"><span class="n">${tokenValid}</span><span class="lbl">Validi</span></div>
+      <div class="tally-box"><span class="n">${tokenUsed}</span><span class="lbl">Usati</span></div>
+    </div>
+    <div class="row-flex" style="margin-top:6px;">
+      <div>
+        <label class="field-label">Quantità da generare</label>
+        <input type="number" min="1" max="10000" id="token-count" value="50">
+      </div>
+    </div>
+    <button class="primary" style="margin-top:12px;" id="generate-tokens">Genera codici</button>
+    <p class="muted" id="token-gen-msg" style="display:none;margin-top:8px;"></p>
+
+    <div class="row-flex" style="margin-top:14px;">
+      <button class="secondary" id="export-csv" style="margin-top:0;">Esporta CSV (tutti)</button>
+      <button class="secondary" id="export-txt" style="margin-top:0;">Esporta TXT (solo validi)</button>
+    </div>
+
+    <button class="danger" id="reset-tokens" style="margin-top:14px;">Cancella tutti i codici</button>
+
+    <hr class="divider">
+    <label class="field-label">Elenco codici (${tokens.length})</label>
+    <div id="tokens-list" style="max-height:260px;overflow-y:auto;">`;
+  if(!tokens.length){
+    html += `<div class="empty-state">Nessun codice generato ancora.</div>`;
+  } else {
+    html += tokens.slice().reverse().map(t=>`
+      <div class="admin-people-item">
+        <span class="name" style="font-family:var(--font-display);letter-spacing:2px;">${t.token}</span>
+        <span class="sesso-tag" style="${t.used?'background:var(--accent);color:#fff;':''}">${t.used?'Usato':'Valido'}</span>
+        <button class="small" data-remove-token="${t.token}">Rimuovi</button>
+      </div>
+    `).join('');
+  }
+  html += `</div></div>`;
+
   html += `<div class="card" style="border-color:var(--accent-dark);">
     <h2 class="section-title">Voti registrati</h2>
     <p class="muted">Totale voti: <strong>${votes.length}</strong></p>
@@ -742,6 +896,60 @@ async function renderAdmin(){
       if(!confirm("Rimuovere questa persona dall'elenco?")) return;
       try{
         await apiDelete('/people/' + btn.dataset.remove, true);
+        renderAdmin();
+      }catch(e){
+        alert('Errore: ' + e.message);
+      }
+    });
+  });
+
+  document.getElementById('generate-tokens').addEventListener('click', async ()=>{
+    const count = parseInt(document.getElementById('token-count').value, 10) || 0;
+    const msg = document.getElementById('token-gen-msg');
+    msg.style.display = 'block';
+    if(count <= 0){
+      msg.textContent = 'Inserisci una quantità valida.';
+      return;
+    }
+    try{
+      const result = await apiPost('/tokens/generate', { count }, true);
+      msg.textContent = `Generati ${result.generated.length} nuovi codici.` + (result.truncated ? ' Attenzione: raggiunto il massimo di 10.000 combinazioni possibili.' : '');
+      renderAdmin();
+    }catch(e){
+      msg.textContent = 'Errore: ' + e.message;
+    }
+  });
+
+  document.getElementById('export-csv').addEventListener('click', ()=>{
+    let csv = 'Codice;Stato;Usato il\r\n';
+    tokens.forEach(t=>{
+      const stato = t.used ? 'Usato' : 'Valido';
+      const usatoIl = t.usedAt ? new Date(t.usedAt).toLocaleString('it-IT') : '';
+      csv += `${t.token};${stato};${usatoIl}\r\n`;
+    });
+    downloadFile('codici_voto.csv', '\uFEFF' + csv, 'text/csv;charset=utf-8;');
+  });
+
+  document.getElementById('export-txt').addEventListener('click', ()=>{
+    const txt = tokens.filter(t=>!t.used).map(t=>t.token).join('\r\n');
+    downloadFile('codici_voto_validi.txt', txt, 'text/plain;charset=utf-8;');
+  });
+
+  document.getElementById('reset-tokens').addEventListener('click', async ()=>{
+    if(!confirm('Cancellare tutti i codici generati? I codici già distribuiti non funzioneranno più.')) return;
+    try{
+      await apiPost('/tokens/reset', {}, true);
+      renderAdmin();
+    }catch(e){
+      alert('Errore: ' + e.message);
+    }
+  });
+
+  main.querySelectorAll('[data-remove-token]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('Rimuovere questo codice?')) return;
+      try{
+        await apiDelete('/tokens/' + btn.dataset.removeToken, true);
         renderAdmin();
       }catch(e){
         alert('Errore: ' + e.message);

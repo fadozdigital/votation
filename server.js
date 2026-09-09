@@ -9,12 +9,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Ventisetteventi6';
+const RESULTS_PASSWORD = process.env.RESULTS_PASSWORD || 'Risultati2026';
 
 function loadData() {
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    if (!Array.isArray(data.tokens)) data.tokens = [];
+    return data;
   } catch (e) {
-    return { config: { n: 3, x: 2, y: 2 }, people: [], votes: [] };
+    return { config: { n: 3, x: 2, y: 2 }, people: [], votes: [], tokens: [] };
   }
 }
 
@@ -39,7 +42,20 @@ function checkAdmin(req, res, next) {
   next();
 }
 
+function checkResults(req, res, next) {
+  const passR = req.header('x-results-password');
+  const passA = req.header('x-admin-password');
+  if (passR === RESULTS_PASSWORD || passA === ADMIN_PASSWORD) {
+    return next();
+  }
+  return res.status(401).json({ error: 'Password risultati non valida.' });
+}
+
 app.post('/api/admin/check', checkAdmin, (req, res) => {
+  res.json({ ok: true });
+});
+
+app.post('/api/results/check', checkResults, (req, res) => {
   res.json({ ok: true });
 });
 
@@ -91,11 +107,88 @@ app.delete('/api/people/:id', checkAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/votes', (req, res) => {
+// ---------- TOKEN ----------
+
+function generateTokens(count) {
+  const existing = new Set(db.tokens.map(t => t.token));
+  const maxPossible = 10000; // combinazioni a 4 cifre: 0000-9999
+  const toGenerate = Math.max(0, Math.min(count, maxPossible - existing.size));
+  const generated = [];
+  while (generated.length < toGenerate) {
+    const t = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    if (!existing.has(t)) {
+      existing.add(t);
+      const tokenObj = { token: t, used: false, usedAt: null };
+      db.tokens.push(tokenObj);
+      generated.push(tokenObj);
+    }
+  }
+  return generated;
+}
+
+app.get('/api/tokens', checkAdmin, (req, res) => {
+  res.json(db.tokens);
+});
+
+app.post('/api/tokens/generate', checkAdmin, (req, res) => {
+  const count = parseInt(req.body.count, 10);
+  if (!Number.isFinite(count) || count <= 0) {
+    return res.status(400).json({ error: 'Quantità non valida.' });
+  }
+  const availableBefore = 10000 - db.tokens.length;
+  const generated = generateTokens(count);
+  saveData();
+  res.json({
+    generated,
+    total: db.tokens.length,
+    truncated: count > availableBefore
+  });
+});
+
+app.delete('/api/tokens/:token', checkAdmin, (req, res) => {
+  const before = db.tokens.length;
+  db.tokens = db.tokens.filter(t => t.token !== req.params.token);
+  if (db.tokens.length === before) {
+    return res.status(404).json({ error: 'Token non trovato.' });
+  }
+  saveData();
+  res.json({ ok: true });
+});
+
+app.post('/api/tokens/reset', checkAdmin, (req, res) => {
+  db.tokens = [];
+  saveData();
+  res.json({ ok: true });
+});
+
+app.post('/api/tokens/validate', (req, res) => {
+  const token = String(req.body.token || '').trim();
+  const entry = db.tokens.find(t => t.token === token);
+  if (!entry) {
+    return res.status(400).json({ valid: false, error: 'Codice non valido.' });
+  }
+  if (entry.used) {
+    return res.status(400).json({ valid: false, error: 'Codice già utilizzato.' });
+  }
+  res.json({ valid: true });
+});
+
+// ---------- VOTI ----------
+
+app.get('/api/votes', checkResults, (req, res) => {
   res.json(db.votes);
 });
 
 app.post('/api/votes', (req, res) => {
+  const token = String(req.body.token || '').trim();
+  const tokenEntry = db.tokens.find(t => t.token === token);
+  if (!tokenEntry) {
+    return res.status(400).json({ error: 'Codice non valido.' });
+  }
+  if (tokenEntry.used) {
+    return res.status(400).json({ error: 'Questo codice è già stato utilizzato per votare.' });
+  }
+
   const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
   if (!ids.length) {
     return res.status(400).json({ error: 'Nessuna selezione inviata.' });
@@ -112,6 +205,9 @@ app.post('/api/votes', (req, res) => {
   if (chosen.length > cfg.n || countM > cfg.x || countF > cfg.y) {
     return res.status(400).json({ error: 'La selezione supera i limiti consentiti.' });
   }
+
+  tokenEntry.used = true;
+  tokenEntry.usedAt = Date.now();
   const vote = { id: newId(), ts: Date.now(), ids: uniqueIds };
   db.votes.push(vote);
   saveData();
